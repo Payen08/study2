@@ -16,9 +16,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
-        
         body { font-family: 'Noto Sans SC', sans-serif; background-color: #f6f8fa; -webkit-tap-highlight-color: transparent; }
         
         .safe-area-top { padding-top: env(safe-area-inset-top); }
@@ -78,8 +78,8 @@
         
         .modal-content { 
             background: white; width: 90%; max-width: 1000px; height: 95vh; 
-            border-radius: 16px; transform: scale(0.95) translateY(10px); transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1); 
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden; 
+            border-radius: 16px; transform: scale(0.95) translateY(10px); transition: 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; overflow: hidden;
         }
         .modal-overlay.open .modal-content { transform: scale(1) translateY(0); }
 
@@ -94,22 +94,36 @@
         }
         
         .editor-scroller { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; background: white; overscroll-behavior: contain; }
-        #note-editor { width: 100%; min-height: 100%; padding: 24px; outline: none; color: #334155; font-size: 16px; line-height: 1.7; }
+        
+        /* 富文本编辑器基础样式 */
+        /* overflow-wrap: anywhere; 是防止内容炸开的关键 */
+        #note-editor { 
+            width: 100%; min-height: 100%; padding: 24px; outline: none; color: #334155; font-size: 16px; 
+            overflow-wrap: anywhere; word-break: break-word; white-space: pre-wrap; 
+        }
         
         #note-editor[contenteditable="false"] { color: #1e293b; background-color: #fff; }
         #note-editor[contenteditable="true"] { background-color: #f8fafc; }
 
-        /* 图片样式：移除了 box-shadow，保留了圆角和边框 */
-        #note-editor img { max-width: 100%; border-radius: 8px; margin: 10px 0; border: 1px solid #e2e8f0; transition: opacity 0.3s; }
+        /* 图片 */
+        #note-editor img { max-width: 100%; border-radius: 8px; margin: 10px 0; border: 1px solid #e2e8f0; transition: opacity 0.3s; cursor: zoom-in; }
         .uploading-img { opacity: 0.5; border: 2px dashed #3b82f6 !important; }
 
-        #note-editor table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
-        #note-editor th, #note-editor td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; }
-        #note-editor th { background-color: #f1f5f9; font-weight: bold; }
+        /* 列表优化 */
         #note-editor ul { list-style-type: disc; padding-left: 20px; margin: 8px 0; }
         #note-editor ol { list-style-type: decimal; padding-left: 20px; margin: 8px 0; }
-        #note-editor blockquote { border-left: 4px solid #3b82f6; padding-left: 12px; color: #64748b; margin: 8px 0; background: #f8fafc; padding-top:4px; padding-bottom:4px;}
+        #note-editor li { margin-bottom: 4px; }
+        
+        /* 引用块 */
+        #note-editor blockquote { border-left: 4px solid #3b82f6; padding-left: 12px; color: #64748b; margin: 8px 0; background: #f1f5f9; padding-top:4px; padding-bottom:4px; border-radius: 0 4px 4px 0; }
+        
+        /* 复选框 */
         #note-editor input[type="checkbox"] { margin-right: 8px; vertical-align: middle; transform: scale(1.3); cursor: pointer; accent-color: #3b82f6; }
+        
+        /* 标题样式 - 设置了蓝色 */
+        #note-editor h3 { font-size: 1.25em; font-weight: 700; color: #2563eb; margin-top: 1em; margin-bottom: 0.5em; }
+        #note-editor h1 { font-size: 1.6em; font-weight: 800; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 1em; }
+
         #note-editor[contenteditable="true"]:empty:before { content: attr(placeholder); color: #94a3b8; pointer-events: none; display: block; }
 
         .sheet-handle { width: 40px; height: 4px; background: #e2e8f0; border-radius: 10px; margin: 8px auto 0; }
@@ -126,6 +140,14 @@
         
         #sync-btn { cursor: pointer; transition: 0.2s; }
         #sync-btn:hover { opacity: 0.8; }
+        
+        #img-zoom-modal { z-index: 200 !important; background: rgba(0,0,0,0.9); display: flex; align-items: center; justify-content: center; }
+        #zoomed-img { object-fit: contain; max-width: 95%; max-height: 95%; border-radius: 4px; transition: transform 0.2s; }
+
+        /* ================= 强制行高 (CSS 锁) ================= */
+        #note-editor.lh-tight, #note-editor.lh-tight * { line-height: 1.3 !important; }
+        #note-editor.lh-normal, #note-editor.lh-normal * { line-height: 1.75 !important; }
+        #note-editor.lh-loose, #note-editor.lh-loose * { line-height: 2.2 !important; }
     </style>
 </head>
 <body class="safe-area-top safe-area-bottom pb-20 md:pb-10">
@@ -170,7 +192,7 @@
 
         <div class="mt-12 text-center pb-8">
              <div id="sync-btn" class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-500 font-bold shadow-sm hover:shadow-md" onclick="changeSyncID()">
-                <i class="fas fa-fingerprint text-blue-500"></i> 同步ID: <span id="sync-id-label" class="text-slate-800 font-mono">LOCAL</span> <i class="fas fa-pen text-[10px] ml-1 opacity-50"></i>
+                 <i class="fas fa-fingerprint text-blue-500"></i> 同步ID: <span id="sync-id-label" class="text-slate-800 font-mono">LOCAL</span> <i class="fas fa-pen text-[10px] ml-1 opacity-50"></i>
             </div>
             <p class="text-[10px] text-slate-300 mt-2">点击上方 ID 可切换多设备同步</p>
         </div>
@@ -190,18 +212,20 @@
                 </div>
                 <button onclick="closeModal()" class="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 flex items-center justify-center transition text-xl">&times;</button>
             </div>
-            
+         
             <div class="editor-scroller">
-                <div id="note-editor" contenteditable="false" placeholder="点击下方“编辑”开始记录..."></div>
+                <div id="note-editor" contenteditable="false" class="lh-normal" placeholder="试试输入 '1. ' 或 '-> '"></div>
             </div>
             
             <div class="modal-footer bg-white px-4 py-3 border-t border-slate-100 flex justify-between items-center shrink-0 safe-area-bottom">
                 <div id="editor-tools" class="flex gap-1 opacity-0 pointer-events-none transition-opacity duration-200">
                     <button class="toolbar-btn" onclick="execCmd('bold')" title="加粗"><i class="fas fa-bold"></i></button>
                     <button class="toolbar-btn" onclick="execCmd('backColor', '#fef08a')" title="高亮"><i class="fas fa-highlighter text-yellow-500"></i></button>
-                    <button class="toolbar-btn" onclick="execCmd('insertUnorderedList')" title="列表"><i class="fas fa-list-ul"></i></button>
+                    
+                    <button class="toolbar-btn" onclick="execCmd('insertUnorderedList')" title="无序列表"><i class="fas fa-list-ul"></i></button>
                     <button class="toolbar-btn" onclick="execCmd('insertOrderedList')" title="数字列表"><i class="fas fa-list-ol"></i></button>
                     <button class="toolbar-btn" onclick="insertCheckbox()" title="任务框"><i class="far fa-check-square"></i></button>
+                    <button class="toolbar-btn" onclick="cycleLineHeight()" title="调整行距"><i class="fas fa-text-height"></i></button>
                 </div>
 
                 <div class="flex gap-3">
@@ -214,6 +238,10 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <div id="img-zoom-modal" class="modal-overlay" onclick="this.classList.remove('open')">
+        <img id="zoomed-img" src="" alt="Zoomed">
     </div>
 
     <div id="add-task-modal" class="modal-overlay">
@@ -239,10 +267,9 @@
 
     <script>
         // ================= 配置区 =================
-        const DEFAULT_SYNC_ID = "default"; // 默认ID设default
+        const DEFAULT_SYNC_ID = "payen"; 
         const SUPABASE_URL = "https://atpywxgykzhgtzhdpqbe.supabase.co"; 
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF0cHl3eGd5a3poZ3R6aGRwcWJlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ3NTAxNzYsImV4cCI6MjA4MDMyNjE3Nn0.UCd3qH2xpR7BpDFkCHUBkEgHXkj3uG1hUW-qMZ7Ys7s";
-        
         const DEMO_DAY_OVERRIDE = 4; 
         // =========================================
 
@@ -256,7 +283,6 @@
         document.getElementById('manifest-link').href = URL.createObjectURL(new Blob([JSON.stringify(manifest)], {type: 'application/json'}));
 
         if ('serviceWorker' in navigator) navigator.serviceWorker.register(URL.createObjectURL(new Blob([`self.addEventListener('install', e => self.skipWaiting());self.addEventListener('fetch', e => {});`], {type: 'application/javascript'}))).catch(() => {});
-
         // ================= Logic =================
 
         const calendarData = [
@@ -281,11 +307,12 @@
             { day: 20, note: "Day 1", special: true, tasks: [{ id: "t20_1", text: "上午: 政治", type: "t-pol" }, { id: "t20_2", text: "下午: 英语", type: "t-eng" }]},
             { day: 21, note: "Day 2", special: true, tasks: [{ id: "t21_1", text: "上午: 工业设计史", type: "t-the" }, { id: "t21_2", text: "下午: 手绘", type: "t-art" }]}
         ];
-
         let supabaseClient = null, isCloud = false, state = { done: [], notes: {}, customTasks: {} };
-        let MY_SYNC_ID = localStorage.getItem('study_sync_id') || DEFAULT_SYNC_ID;
+        let cachedId = localStorage.getItem('study_sync_id');
+        let MY_SYNC_ID = (cachedId && cachedId !== 'default') ? cachedId : DEFAULT_SYNC_ID;
+        let lineHeightIdx = parseInt(localStorage.getItem('study_lh_idx')) || 1; 
+        const lhClasses = ['lh-tight', 'lh-normal', 'lh-loose'];
 
-        // 核心日期逻辑
         function updateDateStatus() {
             const now = new Date();
             let currentDay;
@@ -301,7 +328,6 @@
             });
         }
 
-        // 确保数据结构完整
         function ensureStateStructure(s) {
             if (!s) return { done: [], notes: {}, customTasks: {} };
             if (!s.done) s.done = [];
@@ -315,10 +341,11 @@
             render();
             updateCountdown();
             updateSyncLabel();
+            applyLineHeight();
             
             const editor = document.getElementById('note-editor');
             
-            // 点击空白处聚焦
+            // 点击空白聚焦
             document.querySelector('.editor-scroller').addEventListener('click', (e) => {
                 if (e.target.classList.contains('editor-scroller')) {
                     editor.focus();
@@ -331,74 +358,104 @@
                 }
             });
 
-            // ================== 核心修复：乐观 UI 图片上传 ==================
+            // 图片放大
+            editor.addEventListener('click', e => {
+                if (e.target.tagName === 'IMG' && !isEditMode) {
+                    const src = e.target.src;
+                    document.getElementById('zoomed-img').src = src;
+                    document.getElementById('img-zoom-modal').classList.add('open');
+                }
+            });
+
+            // ============ 核心：Markdown 智能触发 ============
+            editor.addEventListener('keyup', (e) => {
+                if(e.key === ' ' || e.code === 'Space') {
+                    const sel = window.getSelection();
+                    if(!sel.rangeCount) return;
+                    const range = sel.getRangeAt(0);
+                    const node = range.startContainer;
+                    
+                    if(node.nodeType === 3) {
+                        const text = node.textContent;
+                        
+                        // Markdown 触发
+                        if(text.match(/^(\-|\*)\s$/)) { document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('insertUnorderedList'); }
+                        else if(text.match(/^1\.\s$/)) { document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('insertOrderedList'); }
+                        else if(text.match(/^\[\]\s$/)) { document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('delete', false); insertCheckbox(); }
+                        else if(text.match(/^###\s$/)) { document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('formatBlock', false, 'H3'); }
+                        else if(text.match(/^#\s$/)) { document.execCommand('delete', false); document.execCommand('delete', false); document.execCommand('formatBlock', false, 'H1'); }
+                    }
+                }
+            });
+
+            // ============ 核心修复：粘贴逻辑 (Rich Text + 自动修复) ============
             editor.addEventListener('paste', async e => {
                 const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                let isFile = false;
+
+                // 1. 优先处理文件（图片）
                 for (let i = 0; i < items.length; i++) {
                     if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
+                        isFile = true;
                         e.preventDefault(); 
-                        
                         const file = items[i].getAsFile();
-                        if (file.size > 5 * 1024 * 1024) {
-                            alert("图片太大（超过5MB）！请压缩后上传。");
-                            return;
-                        }
+                        if (file.size > 5 * 1024 * 1024) { alert("图片太大（超过5MB）！请压缩后上传。"); return; }
 
-                        // 1. 立即显示本地图片 (乐观 UI)
                         const blobUrl = URL.createObjectURL(file);
                         const uniqueId = `img-${Date.now()}`;
-                        // 这里去掉了 box-shadow
                         const loadingImgTag = `<br><img id="${uniqueId}" src="${blobUrl}" class="uploading-img" style="max-width:100%; border-radius:8px; margin:10px 0; border:1px solid #e2e8f0;"><br>`;
                         document.execCommand('insertHTML', false, loadingImgTag);
 
                         try {
-                            // 2. 后台默默上传
                             const timestamp = new Date().getTime();
                             const fileName = `img_${timestamp}_${Math.random().toString(36).slice(2)}.${file.type.split('/')[1]}`;
-                            
-                            const { data, error } = await supabaseClient
-                                .storage
-                                .from('note-images')
-                                .upload(fileName, file);
-
+                            const { data, error } = await supabaseClient.storage.from('note-images').upload(fileName, file);
                             if (error) throw error;
-
-                            const { data: publicUrlData } = supabaseClient
-                                .storage
-                                .from('note-images')
-                                .getPublicUrl(fileName);
-                            
-                            const cloudUrl = publicUrlData.publicUrl;
-
-                            // 3. 上传成功，替换链接
+                            const { data: publicUrlData } = supabaseClient.storage.from('note-images').getPublicUrl(fileName);
                             const imgEl = document.getElementById(uniqueId);
                             if (imgEl) {
-                                imgEl.src = cloudUrl; // 替换为永久链接
-                                imgEl.removeAttribute('id'); // 移除临时ID
-                                imgEl.classList.remove('uploading-img'); // 移除半透明样式
-                                
-                                // 4. 静默保存 (不退出编辑)
+                                imgEl.src = publicUrlData.publicUrl;
+                                imgEl.removeAttribute('id');
+                                imgEl.classList.remove('uploading-img');
                                 state.notes[`d${curNoteDay}`] = editor.innerHTML;
                                 save(); 
                             }
-
                         } catch (err) {
                             console.error('上传失败:', err);
                             const imgEl = document.getElementById(uniqueId);
-                            if(imgEl) {
-                                imgEl.outerHTML = `<span style="color:red">[图片上传失败]</span>`;
-                            }
-                            alert(`图片上传失败，请重试。\n错误: ${err.message}`);
+                            if(imgEl) imgEl.outerHTML = `<span style="color:red">[图片上传失败]</span>`;
+                            alert(`图片上传失败: ${err.message}`);
                         }
                     }
                 }
+
+                // 2. 如果是文字/HTML
+                if (!isFile) {
+                    e.preventDefault();
+                    // 尝试获取富文本
+                    let htmlData = (e.clipboardData || window.clipboardData).getData('text/html');
+                    
+                    if (htmlData) {
+                        // 2a. 清洗内容：修复箭头 LaTeX 代码
+                        htmlData = htmlData.replace(/\$\\rightarrow\$/g, '→').replace(/\\rightarrow/g, '→');
+                        
+                        // 2b. 清洗样式：去除所有 style="..." 属性，防止外部CSS污染
+                        // 这是一个简单粗暴但有效的正则，保留标签结构(b, li, h3)，但杀掉颜色/宽度等定义
+                        htmlData = htmlData.replace(/ style="[^"]*"/g, ""); 
+                        
+                        document.execCommand('insertHTML', false, htmlData);
+                    } else {
+                        // 2c. 只有纯文本 (fallback)
+                        let textData = (e.clipboardData || window.clipboardData).getData('text/plain');
+                        textData = textData.replace(/\$\\rightarrow\$/g, '→').replace(/\\rightarrow/g, '→');
+                        document.execCommand('insertText', false, textData);
+                    }
+                }
             });
-            // ========================================================
 
             editor.addEventListener('change', e => {
                 if(e.target.tagName === 'INPUT') e.target.checked ? e.target.setAttribute('checked','') : e.target.removeAttribute('checked');
             });
-
             if(SUPABASE_URL && SUPABASE_KEY) {
                 try {
                     supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -407,29 +464,23 @@
             } else loadLocal();
         }
 
-        // 切换同步ID逻辑
         window.changeSyncID = () => {
             const newId = prompt("请输入同步暗号 (多设备需一致):", MY_SYNC_ID);
             if (newId && newId.trim() !== "") {
                 MY_SYNC_ID = newId.trim();
                 localStorage.setItem('study_sync_id', MY_SYNC_ID);
                 updateSyncLabel();
-                // 重新加载数据
-                if(isCloud) {
-                    loadCloud();
-                } else {
-                    alert("云服务连接失败，仅保存ID到本地");
-                }
+                if(isCloud) { loadCloud(); } else { alert("云服务连接失败，仅保存ID到本地"); }
             }
         };
-
         function updateSyncLabel() {
             const display = MY_SYNC_ID === DEFAULT_SYNC_ID ? '默认' : MY_SYNC_ID;
             document.getElementById('sync-id-label').innerText = display;
         }
 
         async function save() {
-            updateProgress(); localStorage.setItem('study_v2', JSON.stringify(state));
+            updateProgress();
+            localStorage.setItem('study_v2', JSON.stringify(state));
             if(isCloud) { updateStatus('syncing'); await supabaseClient.from('study_progress').upsert({ id: MY_SYNC_ID, data: state }); updateStatus('online'); }
         }
         
@@ -437,7 +488,6 @@
             updateStatus('syncing');
             const {data} = await supabaseClient.from('study_progress').select('data').eq('id', MY_SYNC_ID).single(); 
             if(data?.data) { 
-                // 自动修复旧格式: day_3 -> d3
                 let rawData = data.data;
                 if(rawData.notes) {
                     Object.keys(rawData.notes).forEach(k => {
@@ -447,7 +497,7 @@
                     });
                 }
                 state = ensureStateStructure(rawData); 
-                refresh(); 
+                refresh();
                 render(); 
                 updateStatus('online');
             } else {
@@ -457,17 +507,16 @@
             } 
         }
         function loadLocal() { 
-            const s=localStorage.getItem('study_v2'); 
-            if(s) { 
-                state = ensureStateStructure(JSON.parse(s)); 
-                refresh(); 
-                render(); 
-            } 
+            const s=localStorage.getItem('study_v2');
+            if(s) { state = ensureStateStructure(JSON.parse(s)); refresh(); render(); } 
         }
-        function updateStatus(s) { document.getElementById('cloud-status-badge').innerHTML = s==='online' ? `<span class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.6)]"></span> 云同步` : (s==='syncing' ? `<span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span> 同步中` : `<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> 离线`); }
+        function updateStatus(s) { document.getElementById('cloud-status-badge').innerHTML = s==='online' ?
+            `<span class="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.6)]"></span> 云同步` : (s==='syncing' ? `<span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span> 同步中` : `<span class="w-1.5 h-1.5 rounded-full bg-red-400"></span> 离线`);
+        }
 
         function render() {
-            const root = document.getElementById('calendar-view'); root.innerHTML = '';
+            const root = document.getElementById('calendar-view');
+            root.innerHTML = '';
             calendarData.forEach(d => {
                 const card = document.createElement('div');
                 card.className = `day-card ${d.past?'is-past':''} ${d.today?'is-today':''}`;
@@ -485,26 +534,22 @@
 
                 const con = document.createElement('div'); con.className = 'task-container w-full';
                 
-                // 1. Render Default Tasks
                 if(d.tasks) d.tasks.forEach(t => {
                     const el = createEl(t, false, d.day);
                     con.appendChild(el);
                 });
-
-                // 2. Render Custom Tasks
                 const custom = state.customTasks[`d${d.day}`] || [];
                 custom.forEach(t => {
                     const el = createEl(t, true, d.day);
                     con.appendChild(el);
                 });
-
                 card.appendChild(con); root.appendChild(card);
             });
             refresh(); 
         }
 
         function createEl(t, isCustom, day) {
-            const el = document.createElement('div'); 
+            const el = document.createElement('div');
             el.className = `task-item ${t.type}`;
             el.dataset.id = t.id; 
             
@@ -512,14 +557,12 @@
             span.innerText = t.text;
             span.className = "flex-1";
             el.appendChild(span);
-
             if(isCustom) {
                 const del = document.createElement('i');
                 del.className = "fas fa-trash-alt delete-btn";
                 del.onclick = (e) => { e.stopPropagation(); deleteTask(day, t.id); };
                 el.appendChild(del);
             }
-
             el.onclick = (e) => { 
                 if(e.target.classList.contains('delete-btn')) return;
                 toggle(t.id); 
@@ -552,18 +595,15 @@
         let selectedType = 't-pol';
         const taskModal = document.getElementById('add-task-modal');
         const taskInput = document.getElementById('new-task-input');
-
         window.openAddTaskModal = (d) => {
             addingDay = d;
             taskModal.classList.add('open');
             taskInput.value = '';
-            // 默认选中第一个
-            selectType('t-pol', document.querySelector('.type-option[data-val="t-pol"]')); 
+            selectType('t-pol', document.querySelector('.type-option[data-val="t-pol"]'));
             setTimeout(() => taskInput.focus(), 100);
         };
 
         window.closeAddTaskModal = () => taskModal.classList.remove('open');
-
         window.selectType = (type, el) => {
             selectedType = type;
             document.querySelectorAll('.type-option').forEach(opt => opt.classList.remove('selected'));
@@ -573,21 +613,16 @@
         window.confirmAddTask = () => {
             const text = taskInput.value.trim();
             if(!text) return;
-            
             if(!state.customTasks) state.customTasks = {};
             if(!state.customTasks[`d${addingDay}`]) state.customTasks[`d${addingDay}`] = [];
-            
             const newTask = {
                 id: `custom-${Date.now()}`,
                 text: text,
                 type: selectedType
             };
-            
             state.customTasks[`d${addingDay}`].push(newTask);
-            
             closeAddTaskModal();
-            render(); // Re-render to show new task
-            save();
+            render(); save();
         };
 
         window.deleteTask = (day, id) => {
@@ -595,11 +630,9 @@
             const key = `d${day}`;
             if(state.customTasks[key]) {
                 state.customTasks[key] = state.customTasks[key].filter(t => t.id !== id);
-                render();
-                save();
+                render(); save();
             }
         };
-
         // Note Logic (View/Edit)
         let curNoteDay = null;
         let isEditMode = false;
@@ -610,29 +643,32 @@
         const saveBtn = document.getElementById('save-btn');
         const badge = document.getElementById('mode-badge');
 
-        // Modify execCmd to support value argument for backColor
         window.execCmd = (cmd, value = null) => { 
-            document.execCommand(cmd, false, value); 
+            document.execCommand(cmd, false, value);
             editor.focus(); 
         };
 
         window.openNote = d => {
-            curNoteDay = d; isEditMode = false;
+            curNoteDay = d;
+            isEditMode = false;
             document.getElementById('modal-date-title').innerText = `12月${d}日`;
             const content = state.notes[`d${d}`];
             editor.innerHTML = content || '';
-            
-            // Auto edit if empty
             if(!content) { toggleEditMode(true); } else { setMode(false); }
             
-            modal.classList.add('open'); document.body.style.overflow = 'hidden';
+            modal.classList.add('open');
+            document.body.style.overflow = 'hidden';
         };
 
         window.toggleEditMode = (forceState) => {
             setMode(typeof forceState === 'boolean' ? forceState : !isEditMode);
         }
 
+        // ============ 修复：保持滚动位置 ============
         function setMode(edit) {
+            const scroller = document.querySelector('.editor-scroller');
+            const savedScroll = scroller.scrollTop;
+
             isEditMode = edit;
             editor.contentEditable = edit;
             if(edit) {
@@ -640,7 +676,7 @@
                 editBtn.classList.add('hidden');
                 saveBtn.classList.remove('hidden');
                 badge.innerText = "EDIT"; badge.className = "text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-600 font-bold tracking-wide";
-                setTimeout(() => editor.focus(), 50);
+                setTimeout(() => { editor.focus(); scroller.scrollTop = savedScroll; }, 50);
             } else {
                 tools.classList.add('opacity-0', 'pointer-events-none', 'translate-y-4');
                 editBtn.classList.remove('hidden');
@@ -649,15 +685,26 @@
             }
         }
 
+        // 行距调整
+        window.cycleLineHeight = () => {
+            lineHeightIdx = (lineHeightIdx + 1) % 3;
+            localStorage.setItem('study_lh_idx', lineHeightIdx);
+            applyLineHeight();
+        };
+
+        function applyLineHeight() {
+            const el = document.getElementById('note-editor');
+            lhClasses.forEach(c => el.classList.remove(c));
+            el.classList.add(lhClasses[lineHeightIdx]);
+        }
+
         window.closeModal = () => { modal.classList.remove('open'); document.body.style.overflow = ''; if(isEditMode) saveNote(); }; 
         window.saveNote = () => {
             const v = editor.innerHTML;
             if(v && v !== '<br>') state.notes[`d${curNoteDay}`] = v; else delete state.notes[`d${curNoteDay}`];
             refresh(); save(); setMode(false);
         };
-
         window.insertCheckbox = () => { document.execCommand('insertHTML', false, `<input type="checkbox"> `); editor.focus(); };
-
         function updateProgress() {
             const total = document.querySelectorAll('.task-item').length;
             const done = state.done.length;

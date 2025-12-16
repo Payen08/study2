@@ -85,12 +85,23 @@
 
         .add-task-modal { width: 85%; max-width: 320px; height: auto; border-radius: 16px; padding: 24px; }
 
+        /* 搜索弹窗样式 */
+        .search-modal { width: 90%; max-width: 600px; height: 70vh; max-height: 600px; padding: 0; border-radius: 20px; }
+        .search-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 10px; }
+        .search-input { flex: 1; font-size: 16px; outline: none; color: #334155; }
+        .search-results { flex: 1; overflow-y: auto; padding: 10px; }
+        .search-item { padding: 12px; border-radius: 12px; cursor: pointer; margin-bottom: 8px; transition: 0.2s; border: 1px solid transparent; }
+        .search-item:hover { background: #f8fafc; border-color: #e2e8f0; }
+        .search-highlight { background: #fef08a; color: #854d0e; padding: 0 2px; rounded: 2px; }
+        .empty-state { text-align: center; color: #94a3b8; padding: 40px; font-size: 14px; }
+
         @media (max-width: 768px) {
             .modal-overlay.note-mode { align-items: flex-end; padding-bottom: 0; }
             .modal-content.note-mode { width: 100%; max-width: 100%; border-radius: 24px 24px 0 0; margin: 0; transform: translateY(100%); height: 95vh; overscroll-behavior: contain; }
             .modal-overlay.open .modal-content.note-mode { transform: translateY(0); }
             .modal-content.note-mode .modal-header { padding-top: 16px; } 
             .modal-content.note-mode .modal-footer { padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+            .search-modal { width: 100%; height: 100%; max-width: 100%; max-height: 100%; border-radius: 0; }
         }
         
         .editor-scroller { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; position: relative; background: white; overscroll-behavior: contain; }
@@ -148,6 +159,41 @@
         #note-editor.lh-tight, #note-editor.lh-tight * { line-height: 1.3 !important; }
         #note-editor.lh-normal, #note-editor.lh-normal * { line-height: 1.75 !important; }
         #note-editor.lh-loose, #note-editor.lh-loose * { line-height: 2.2 !important; }
+
+        /* ================= 录音/音频样式 ================= */
+        .recording-active {
+            color: #ef4444 !important; /* 红色 */
+            background-color: #fef2f2;
+            animation: pulse-red 1.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        /* 自定义音频播放器外观 - 胶囊长条状 */
+        audio {
+            width: 100%;
+            height: 40px;
+            margin: 12px 0;
+            border-radius: 9999px !important; /* 强制胶囊 */
+            background-color: #f1f5f9;
+        }
+        
+        /* 音频容器 - 胶囊长条状 */
+        .audio-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f8fafc;
+            padding: 8px 16px; /* 增加左右内边距 */
+            border-radius: 9999px !important; /* 强制胶囊 */
+            border: 1px solid #e2e8f0;
+            margin: 8px 0;
+        }
+        .audio-icon { color: #3b82f6; font-size: 1.2rem; }
     </style>
 </head>
 <body class="safe-area-top safe-area-bottom pb-20 md:pb-10">
@@ -162,11 +208,19 @@
                             <span class="w-1.5 h-1.5 rounded-full bg-slate-300"></span> 离线
                         </div>
                     </div>
+                    
+                    <!-- 标题 + 迷你搜索栏 (并排布局) -->
                     <div class="flex items-center gap-3 mb-1">
-                        <h1 class="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">12月冲刺</h1>
+                        <h1 class="text-2xl md:text-3xl font-black text-slate-800 tracking-tight shrink-0">12月冲刺</h1>
+                        
+                        <!-- 迷你搜索胶囊 -->
+                        <div onclick="toggleSearch()" class="bg-slate-50 border border-slate-200 rounded-full px-5 py-1.5 text-xs text-slate-400 flex items-center gap-2 cursor-pointer hover:bg-slate-100 hover:border-blue-200 transition group shadow-sm active:scale-95">
+                            <i class="fas fa-search text-slate-300 group-hover:text-blue-500 transition"></i>
+                            <span class="font-bold">搜索</span>
+                        </div>
                     </div>
                     
-                    <div class="flex items-center gap-3 max-w-xs mt-2">
+                    <div class="flex items-center gap-3 max-w-xs mt-3">
                         <div class="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden relative">
                             <div id="progress-fill" class="h-full bg-blue-500 rounded-full transition-all duration-700 relative overflow-hidden" style="width: 0%">
                                 <div class="progress-shimmer"></div>
@@ -198,6 +252,20 @@
         </div>
     </div>
 
+    <!-- 搜索模态框 -->
+    <div id="search-modal" class="modal-overlay">
+        <div class="modal-content search-modal bg-white flex flex-col">
+            <div class="search-header">
+                <i class="fas fa-search text-slate-400"></i>
+                <input type="text" id="search-input" class="search-input" placeholder="搜索笔记或任务..." oninput="handleSearch(this.value)">
+                <button onclick="toggleSearch()" class="text-slate-400 hover:text-slate-600 text-sm font-bold">取消</button>
+            </div>
+            <div id="search-results" class="search-results">
+                <div class="empty-state">输入关键词开始搜索...</div>
+            </div>
+        </div>
+    </div>
+
     <div id="note-modal" class="modal-overlay note-mode">
         <div class="modal-content note-mode">
             <div class="md:hidden w-full bg-white pt-2 pb-1 shrink-0" onclick="closeModal()">
@@ -218,13 +286,23 @@
             </div>
             
             <div class="modal-footer bg-white px-4 py-3 border-t border-slate-100 flex justify-between items-center shrink-0 safe-area-bottom">
-                <div id="editor-tools" class="flex gap-1 opacity-0 pointer-events-none transition-opacity duration-200">
+                <div id="editor-tools" class="flex gap-1 opacity-0 pointer-events-none transition-opacity duration-200 items-center">
                     <button class="toolbar-btn" onclick="execCmd('bold')" title="加粗"><i class="fas fa-bold"></i></button>
                     <button class="toolbar-btn" onclick="execCmd('backColor', '#fef08a')" title="高亮"><i class="fas fa-highlighter text-yellow-500"></i></button>
                     
                     <button class="toolbar-btn" onclick="execCmd('insertUnorderedList')" title="无序列表"><i class="fas fa-list-ul"></i></button>
                     <button class="toolbar-btn" onclick="execCmd('insertOrderedList')" title="数字列表"><i class="fas fa-list-ol"></i></button>
                     <button class="toolbar-btn" onclick="insertCheckbox()" title="任务框"><i class="far fa-check-square"></i></button>
+                    
+                    <div class="w-px h-5 bg-slate-200 mx-1"></div>
+
+                    <!-- 录音按钮 -->
+                    <button id="record-btn" class="toolbar-btn text-red-500" onclick="toggleRecording()" title="点击录音(WebM)"><i class="fas fa-microphone-alt"></i></button>
+                    
+                    <!-- 上传按钮 (隐藏的 input) -->
+                    <input type="file" id="audio-upload-input" accept="audio/*" class="hidden" onchange="handleAudioUpload(this)">
+                    <button class="toolbar-btn text-blue-500" onclick="document.getElementById('audio-upload-input').click()" title="上传音频"><i class="fas fa-file-audio"></i></button>
+                    
                     <button class="toolbar-btn" onclick="cycleLineHeight()" title="调整行距"><i class="fas fa-text-height"></i></button>
                 </div>
 
@@ -236,31 +314,6 @@
                         <i class="fas fa-check"></i> 完成
                     </button>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="img-zoom-modal" class="modal-overlay" onclick="this.classList.remove('open')">
-        <img id="zoomed-img" src="" alt="Zoomed">
-    </div>
-
-    <div id="add-task-modal" class="modal-overlay">
-        <div class="modal-content add-task-modal bg-white">
-            <h3 class="font-bold text-lg mb-4 text-slate-800 flex items-center gap-2">
-                <span class="w-1 h-5 bg-blue-500 rounded-full"></span> 新增任务
-            </h3>
-            <input type="text" id="new-task-input" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl mb-5 outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="例如：背诵肖四第一套..." onkeydown="if(event.key === 'Enter') confirmAddTask()">
-            
-            <div class="grid grid-cols-2 gap-3 mb-6">
-                <div class="type-option" data-val="t-pol" onclick="selectType('t-pol', this)">政治</div>
-                <div class="type-option" data-val="t-eng" onclick="selectType('t-eng', this)">英语</div>
-                <div class="type-option" data-val="t-art" onclick="selectType('t-art', this)">手绘</div>
-                <div class="type-option" data-val="t-the" onclick="selectType('t-the', this)">工业设计史</div>
-            </div>
-
-            <div class="flex gap-3">
-                <button onclick="closeAddTaskModal()" class="flex-1 py-3 bg-slate-100 text-slate-500 rounded-xl font-bold text-sm hover:bg-slate-200 transition">取消</button>
-                <button onclick="confirmAddTask()" class="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-700 transition">确认添加</button>
             </div>
         </div>
     </div>
@@ -648,7 +701,8 @@
             editor.focus(); 
         };
 
-        window.openNote = d => {
+        // 修改 openNote，支持传入高亮关键词
+        window.openNote = (d, highlightQuery = null) => {
             curNoteDay = d;
             isEditMode = false;
             document.getElementById('modal-date-title').innerText = `12月${d}日`;
@@ -658,6 +712,13 @@
             
             modal.classList.add('open');
             document.body.style.overflow = 'hidden';
+
+            // 如果有搜索关键词，延时执行滚动和高亮
+            if (highlightQuery) {
+                setTimeout(() => {
+                    scrollToText(highlightQuery);
+                }, 300); // 稍微等待模态框动画和DOM渲染
+            }
         };
 
         window.toggleEditMode = (forceState) => {
@@ -711,6 +772,305 @@
             const p = total ? Math.round((done/total)*100) : 0;
             document.getElementById('progress-text').innerText = p + '%';
             document.getElementById('progress-fill').style.width = p + '%';
+        }
+
+        // ================= Search Logic (New) =================
+        const searchModal = document.getElementById('search-modal');
+        const searchInput = document.getElementById('search-input');
+        const searchResults = document.getElementById('search-results');
+
+        window.toggleSearch = () => {
+            if(searchModal.classList.contains('open')) {
+                searchModal.classList.remove('open');
+            } else {
+                searchModal.classList.add('open');
+                setTimeout(() => searchInput.focus(), 100);
+            }
+        };
+
+        window.handleSearch = (query) => {
+            if (!query || query.trim() === '') {
+                searchResults.innerHTML = `<div class="empty-state">输入关键词开始搜索...</div>`;
+                return;
+            }
+            
+            const results = [];
+            const q = query.toLowerCase();
+
+            // 1. 搜索笔记
+            Object.keys(state.notes).forEach(key => {
+                const day = key.replace('d', '');
+                const content = state.notes[key];
+                // 简单的HTML转文本，用于搜索
+                const tempDiv = document.createElement('div');
+                tempDiv.innerHTML = content;
+                const plainText = tempDiv.textContent || tempDiv.innerText || "";
+                
+                if (plainText.toLowerCase().includes(q)) {
+                    // 截取摘要
+                    const idx = plainText.toLowerCase().indexOf(q);
+                    const start = Math.max(0, idx - 10);
+                    const end = Math.min(plainText.length, idx + q.length + 20);
+                    const snippet = plainText.substring(start, end);
+                    
+                    results.push({
+                        day: day,
+                        type: '笔记',
+                        snippet: snippet,
+                        fullMatch: plainText
+                    });
+                }
+            });
+
+            // 2. 搜索自定义任务
+            Object.keys(state.customTasks).forEach(key => {
+                const day = key.replace('d', '');
+                state.customTasks[key].forEach(task => {
+                    if (task.text.toLowerCase().includes(q)) {
+                        results.push({
+                            day: day,
+                            type: '任务',
+                            snippet: task.text,
+                            fullMatch: task.text
+                        });
+                    }
+                });
+            });
+
+            // 3. 渲染结果
+            if (results.length === 0) {
+                searchResults.innerHTML = `<div class="empty-state">未找到相关内容</div>`;
+                return;
+            }
+
+            searchResults.innerHTML = results.map(r => {
+                // 高亮关键词
+                const highlighted = r.snippet.replace(new RegExp(query, 'gi'), match => `<span class="search-highlight">${match}</span>`);
+                const typeColor = r.type === '笔记' ? 'text-blue-500 bg-blue-50' : 'text-purple-500 bg-purple-50';
+                
+                // 将 query 传递给 jumpToResult
+                // 注意：需要转义 query 中的单引号，防止破坏 JS 字符串
+                const safeQuery = query.replace(/'/g, "\\'");
+                
+                return `
+                <div class="search-item" onclick="jumpToResult('${r.day}', '${safeQuery}')">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold text-slate-700">12月${r.day}日</span>
+                        <span class="text-[10px] px-2 rounded ${typeColor}">${r.type}</span>
+                    </div>
+                    <div class="text-sm text-slate-500 truncate">...${highlighted}...</div>
+                </div>
+                `;
+            }).join('');
+        };
+
+        window.jumpToResult = (day, query) => {
+            toggleSearch(); // 关闭搜索框
+            setTimeout(() => {
+                openNote(day, query); // 打开对应笔记，并传入关键词
+            }, 300);
+        };
+
+        // 核心功能：滚动到文本并高亮
+        function scrollToText(text) {
+            const editor = document.getElementById('note-editor');
+            if (!text || !editor) return;
+
+            // 清除之前的选择
+            window.getSelection().removeAllRanges();
+
+            // 使用 TreeWalker 遍历文本节点，查找匹配项
+            const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            const lowerText = text.toLowerCase();
+
+            while (node = walker.nextNode()) {
+                const nodeVal = node.nodeValue.toLowerCase();
+                const index = nodeVal.indexOf(lowerText);
+                
+                if (index !== -1) {
+                    // 创建 Range 选中该文本
+                    const range = document.createRange();
+                    range.setStart(node, index);
+                    range.setEnd(node, index + text.length);
+                    
+                    // 执行选中（视觉高亮）
+                    const sel = window.getSelection();
+                    sel.addRange(range);
+                    
+                    // 获取选区位置并滚动
+                    // 使用 scrollIntoView 是最稳妥的方法
+                    // 我们通过 range 的 bounding rect 找到其父元素，或者直接让最近的元素滚动
+                    // 为了精确控制，我们滚动到父元素的中心
+                    
+                    if (node.parentElement) {
+                        node.parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        
+                        // 额外视觉反馈：闪烁一下背景
+                        const originalBg = node.parentElement.style.backgroundColor;
+                        node.parentElement.style.transition = 'background-color 0.5s';
+                        node.parentElement.style.backgroundColor = '#fef08a'; // 黄色高亮背景
+                        
+                        setTimeout(() => {
+                            node.parentElement.style.backgroundColor = originalBg;
+                        }, 1500);
+                    }
+                    
+                    break; // 找到第一个匹配项后停止
+                }
+            }
+        }
+
+        // ================= WebM 录音逻辑 (原生) =================
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+
+        window.toggleRecording = async () => {
+            const btn = document.getElementById('record-btn');
+            
+            if (!isRecording) {
+                // --- 开始录音 ---
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = event => {
+                        audioChunks.push(event.data);
+                    };
+
+                    mediaRecorder.onstop = async () => {
+                        // 录音停止后，处理音频 (WebM)
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        await uploadAudioToSupabase(audioBlob, 'webm');
+                        
+                        // 停止占用麦克风
+                        stream.getTracks().forEach(track => track.stop());
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    btn.classList.add('recording-active');
+                    editor.focus(); 
+                    
+                } catch (err) {
+                    alert("无法访问麦克风，请检查权限设置。\n错误: " + err.message);
+                    console.error(err);
+                }
+            } else {
+                // --- 停止录音 ---
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    isRecording = false;
+                    btn.classList.remove('recording-active');
+                }
+            }
+        };
+
+        // ================= 文件上传逻辑 =================
+        window.handleAudioUpload = async (input) => {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                if (file.size > 100 * 1024 * 1024) { alert("音频文件不能超过 100MB"); return; } // Check for 100MB
+                await uploadAudioToSupabase(file, 'upload');
+                input.value = ''; // 重置
+            }
+        };
+
+        async function uploadAudioToSupabase(blobOrFile, type) {
+            // 1. 尝试恢复焦点 (解决选择文件后execCommand失效问题)
+            if (document.activeElement !== editor) {
+                editor.focus();
+                // 确保光标在末尾 (可选)
+                const range = document.createRange();
+                range.selectNodeContents(editor);
+                range.collapse(false);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+
+            // 2. 插入 Loading
+            const tempId = `audio-loading-${Date.now()}`;
+            const label = type === 'webm' ? '正在上传录音(WebM)...' : '正在上传音频...';
+            const loadingHtml = `<div id="${tempId}" style="color:#3b82f6; font-size:12px; padding:5px;">⏳ ${label}</div><br>`;
+            
+            // 尝试执行命令，如果失败则回退到追加模式
+            const success = document.execCommand('insertHTML', false, loadingHtml);
+            if (!success) {
+                editor.innerHTML += loadingHtml;
+            }
+
+            try {
+                if (!supabaseClient) throw new Error("未连接云端，无法上传 (Supabase未初始化)");
+
+                const timestamp = new Date().getTime();
+                // 确定扩展名
+                let ext = 'mp3'; // 默认
+                if (type === 'webm') ext = 'webm';
+                else if (type === 'upload' && blobOrFile.name) {
+                    const parts = blobOrFile.name.split('.');
+                    if(parts.length > 1) ext = parts.pop();
+                }
+                
+                const fileName = `audio_${timestamp}_${Math.random().toString(36).slice(2)}.${ext}`;
+                
+                // 确定 Content-Type
+                let contentType = 'audio/mpeg';
+                if (type === 'webm') contentType = 'audio/webm';
+                else if (blobOrFile.type) contentType = blobOrFile.type;
+
+                const { data, error } = await supabaseClient.storage
+                    .from('note-images') 
+                    .upload(fileName, blobOrFile, { contentType: contentType });
+
+                if (error) throw error;
+
+                const { data: publicUrlData } = supabaseClient.storage
+                    .from('note-images')
+                    .getPublicUrl(fileName);
+
+                // 替换 Loading -> 播放器
+                const loadingEl = document.getElementById(tempId);
+                if (loadingEl) loadingEl.remove();
+
+                const audioHtml = `
+                    <div class="audio-wrapper" contenteditable="false">
+                        <i class="fas fa-music audio-icon"></i>
+                        <audio controls src="${publicUrlData.publicUrl}"></audio>
+                    </div><br>
+                `;
+                
+                // 再次尝试插入播放器
+                editor.focus();
+                const insertSuccess = document.execCommand('insertHTML', false, audioHtml);
+                if (!insertSuccess) {
+                     editor.innerHTML += audioHtml;
+                }
+                
+                saveNote();
+
+            } catch (err) {
+                console.error('上传失败详情:', err); // Add detailed log
+                const loadingEl = document.getElementById(tempId);
+                let msg = err.message;
+                // Translate common Supabase errors
+                if (msg.includes('mime') || msg.includes('type')) {
+                    msg = "格式不支持 (请在Supabase后台Storage允许audio/*)";
+                } else if (msg.includes('storage quota')) {
+                    msg = "存储空间已满";
+                } else if (msg.includes('Payload too large') || msg.includes('Entity Too Large') || msg.includes('413')) {
+                     msg = "文件太大 (后端限制未解除，请运行SQL调整为100MB)";
+                }
+                
+                if (loadingEl) {
+                    loadingEl.innerHTML = `<span style="color:red">⚠️ 上传失败: ${msg}</span>`;
+                } else {
+                    // 如果loading没插入成功，这里弹窗
+                    alert(`上传出错: ${msg}`);
+                }
+            }
         }
 
         init();
